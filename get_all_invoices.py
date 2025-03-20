@@ -3,11 +3,23 @@ import json
 import csv
 import urllib
 import os
+import sys
 from dotenv import load_dotenv
+from datetime import datetime
 
 
-# load API keys from keys.env
-load_dotenv()
+# get base path depending on whether script is run from source or executable
+try:
+    base_path = os.path.dirname(sys.executable)
+except Exception:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+# Path to the .env file in the same directory as the executable/script
+env_path = os.path.join(base_path, '.env')
+print(f'env path: {env_path}')
+
+# Load environment variables from the .env file
+load_dotenv(dotenv_path=env_path)
 
 conn = http.client.HTTPSConnection("api.karbonhq.com")
 payload = ''
@@ -16,7 +28,7 @@ headers = {
     'Authorization': os.getenv("bearer_token"),
     'AccessKey': os.getenv("access_key")
 }
-print(headers)
+
 def list_all_inv():
     # gets all invoices in Karbon and gets address from contact instead of invoice. takes a while and spreadsheet needs filtered down to what you need
 
@@ -180,8 +192,48 @@ def get_inv_line_items():
     
     print("Spreadsheet with line items created.")
 
+def filter_overdue():
+    # Get current date
+    current_date = datetime.now().date()
+
+    with open('invoices.csv',mode='r',encoding='utf-8') as inv_file:
+        reader = csv.DictReader(inv_file)
+
+        #prep headers for output csv
+        headers = [field for field in reader.fieldnames if field not in ['Invoice Key', 'Status']]
+
+        #open output csv
+        with open(f'{current_date} overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
+            writer = csv.DictWriter(overdue_file, fieldnames=headers)
+            writer.writeheader()
+
+            for row in reader:
+                # skip rows that don't contain 'Awaiting Payment' in status column
+                if(row['Status'] != 'AwaitingPayment'):
+                    continue
+
+                # check date
+                try:
+                    due_date = datetime.strptime(row['Due Date'], '%Y-%m-%d').date()
+                    if(due_date >= current_date):
+                        continue
+                except ValueError:
+                    # skip row if date format is incorrect
+                    continue
+                
+                # remove unncecessary columns
+                del row['Invoice Key']
+                del row['Status']
+
+                # write row to output csv
+                writer.writerow(row)
+    print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
+
 # run functions 
-user_input = input("Get line items? (y/n):")
+get_line_items_input = input("Get line items? It will take much longer. (y/n):")
+filter_overdue_input = input("Create a csv with only overdue invoices? (y/n):")
 list_all_inv()
-if user_input == "y":
+if get_line_items_input == "y":
     get_inv_line_items()
+if filter_overdue_input == "y":
+    filter_overdue()
