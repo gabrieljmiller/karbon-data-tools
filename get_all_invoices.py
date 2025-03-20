@@ -4,6 +4,7 @@ import csv
 import urllib
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 
 # load API keys from keys.env
@@ -180,8 +181,44 @@ def get_inv_line_items():
     
     print("Spreadsheet with line items created.")
 
+def filter_overdue():
+    # Get current date
+    current_date = datetime.now().date()
+
+    with open('invoices.csv',mode='r',encoding='utf-8') as inv_file:
+        reader = csv.DictReader(inv_file)
+
+        #prep headers for output csv
+        headers = reader.fieldnames
+
+        #open output csv
+        with open('overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
+            writer = csv.DictWriter(overdue_file, fieldnames=headers)
+            writer.writeheader()
+
+            for row in reader:
+                # skip rows that don't contain 'Awaiting Payment' in status column
+                if(row['Status'] != 'Awaiting Payment'):
+                    continue
+
+                # check date
+                try:
+                    due_date = datetime.strptime(row['Due Date'], '%Y-%m-%d').date()
+                    if(due_date >= current_date):
+                        continue
+                except ValueError:
+                    # skip row if date format is incorrect
+                    continue
+
+                # write row to output csv
+                writer.writerow(row)
+    print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
+
 # run functions 
-user_input = input("Get line items? It will take much longer. (y/n):")
+get_line_items_input = input("Get line items? It will take much longer. (y/n):")
+filter_overdue_input = input("Create a csv with only overdue invoices? (y/n):")
 list_all_inv()
-if user_input == "y":
+if get_line_items_input == "y":
     get_inv_line_items()
+if filter_overdue_input == "y":
+    filter_overdue()
