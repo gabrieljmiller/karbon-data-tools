@@ -189,16 +189,16 @@ def filter_overdue():
         reader = csv.DictReader(inv_file)
 
         #prep headers for output csv
-        headers = reader.fieldnames
+        headers = [field for field in reader.fieldnames if field not in ['Invoice Key', 'Status']]
 
         #open output csv
-        with open('overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
+        with open(f'{current_date} overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
             writer = csv.DictWriter(overdue_file, fieldnames=headers)
             writer.writeheader()
 
             for row in reader:
                 # skip rows that don't contain 'Awaiting Payment' in status column
-                if(row['Status'] != 'Awaiting Payment'):
+                if(row['Status'] != 'AwaitingPayment'):
                     continue
 
                 # check date
@@ -209,6 +209,10 @@ def filter_overdue():
                 except ValueError:
                     # skip row if date format is incorrect
                     continue
+                
+                # remove unncecessary columns
+                del row['Invoice Key']
+                del row['Status']
 
                 # write row to output csv
                 writer.writerow(row)
