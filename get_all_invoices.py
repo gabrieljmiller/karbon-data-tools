@@ -16,7 +16,7 @@ headers = {
     'Authorization': os.getenv("bearer_token"),
     'AccessKey': os.getenv("access_key")
 }
-print(headers)
+
 def list_all_inv():
     # gets all invoices in Karbon and gets address from contact instead of invoice. takes a while and spreadsheet needs filtered down to what you need
 
@@ -181,7 +181,7 @@ def get_inv_line_items():
     print("Spreadsheet with line items created.")
 
 # run functions 
-user_input = input("Get line items? (y/n):")
+user_input = input("Get line items? It will take much longer. (y/n):")
 list_all_inv()
 if user_input == "y":
     get_inv_line_items()
