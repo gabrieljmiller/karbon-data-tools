@@ -3,12 +3,23 @@ import json
 import csv
 import urllib
 import os
+import sys
 from dotenv import load_dotenv
 from datetime import datetime
 
 
-# load API keys from keys.env
-load_dotenv()
+# get base path depending on whether script is run from source or executable
+try:
+    base_path = os.path.dirname(sys.executable)
+except Exception:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+# Path to the .env file in the same directory as the executable/script
+env_path = os.path.join(base_path, '.env')
+print(f'env path: {env_path}')
+
+# Load environment variables from the .env file
+load_dotenv(dotenv_path=env_path)
 
 conn = http.client.HTTPSConnection("api.karbonhq.com")
 payload = ''
