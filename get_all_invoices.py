@@ -192,6 +192,62 @@ def get_inv_line_items():
     
     print("Spreadsheet with line items created.")
 
+def get_inv_payments():
+    # get payments for invoices
+    print("Retrieving payments....")
+    with open('invoices.csv', mode='r', encoding='utf-8-sig') as inv_no_file:
+        
+        # create csv reader and skip header row
+        csv_reader = csv.reader(inv_no_file)
+        next(csv_reader)
+
+        # create csv file to write
+        with open('invoices_payments.csv', mode='w', newline='', encoding='utf-8') as new_file:
+            csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
+
+            # prepare header row
+            csv_writer.writerow(['Invoice Number', 'Client', 'Street', 'City', 'State', 'Zipcode', 'Email', 'Invoice Total', 'Status', 'Due Date', 'Invoice Date', 'Payment Date', 'Payment Amount', 'Payment Type', 'Payment Key'])
+
+            # start reading csv and getting invoice with key
+            for row in csv_reader:
+                inv_key = str(row[10]).strip()
+                inv_key_encoded = urllib.parse.quote(inv_key)
+                conn.request('GET', f'/v3/Invoices/{inv_key_encoded}?$expand=Payments', payload, headers)
+                res = conn.getresponse()
+                data = res.read()
+            
+                # Decode JSON response
+                json_data = json.loads(data.decode("utf-8"))
+
+                # get invoice info
+                inv_no = row[1]
+                client_name = row[0]
+                street = row[3]
+                city = row[4]
+                state = row[5]
+                zipcode = row[6]
+                inv_total = row[2]
+                status = row[7]
+                due_date = row[8]
+                inv_date = row[9]
+                email = row[10]
+
+                # Get payments
+                payments = json_data.get('Payments', [])
+
+                for payment in payments:
+                    payment_date = payment.get('PaymentDate', '')
+                    payment_amount = payment.get('Amount', '')
+                    payment_type = payment.get('PaymentType', '')
+                    payment_key = payment.get('PaymentKey', '')
+
+                    # Write a new row for each payment with the original invoice details
+                    csv_writer.writerow([inv_no, client_name, street, city, state, zipcode, email, inv_total, status, due_date, inv_date, payment_date, payment_amount, payment_type, payment_key])
+
+                print(f"Processed invoice {inv_no} with {len(payments)} payments.")
+            
+    print("Spreadsheet with payments created.")
+
 def filter_overdue():
     # Get current date
     current_date = datetime.now().date()
@@ -230,10 +286,16 @@ def filter_overdue():
     print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
 
 # run functions 
+get_inv_input = input("Generate new base invoice list? (y/n):")
 get_line_items_input = input("Get line items? It will take much longer. (y/n):")
 filter_overdue_input = input("Create a csv with only overdue invoices? (y/n):")
-list_all_inv()
+get_payments_input = input("Get payments for invoices? (y/n):")
+
+if get_inv_input == "y":
+    list_all_inv()
 if get_line_items_input == "y":
     get_inv_line_items()
 if filter_overdue_input == "y":
     filter_overdue()
+if get_payments_input == "y":
+    get_inv_payments()
