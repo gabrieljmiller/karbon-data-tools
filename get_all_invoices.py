@@ -29,6 +29,9 @@ headers = {
     'AccessKey': os.getenv("access_key")
 }
 
+# Get current date
+current_date = datetime.now().date()
+
 def list_all_inv():
     # gets all invoices in Karbon and gets address from contact instead of invoice. takes a while and spreadsheet needs filtered down to what you need
 
@@ -128,7 +131,7 @@ def get_inv_line_items():
         next(csv_reader)
 
         # create csv file to write
-        with open('invoices_line_items.csv', mode='w', newline='', encoding='utf-8') as new_file:
+        with open(f'{current_date} invoices_line_items.csv', mode='w', newline='', encoding='utf-8') as new_file:
             csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
 
             # prepare header row
@@ -210,7 +213,7 @@ def get_inv_payments():
         next(csv_reader)
 
         # create csv file to write
-        with open('invoices_payments.csv', mode='w', newline='', encoding='utf-8') as new_file:
+        with open(f'{current_date} invoices_payments.csv', mode='w', newline='', encoding='utf-8') as new_file:
             csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
 
             # prepare header row
@@ -258,40 +261,37 @@ def get_inv_payments():
     print("Spreadsheet with payments created.")
 
 def filter_overdue():
-    # Get current date
-    current_date = datetime.now().date()
-
     with open('invoices.csv',mode='r',encoding='utf-8') as inv_file:
         reader = csv.DictReader(inv_file)
 
-        #prep headers for output csv
-        headers = [field for field in reader.fieldnames if field not in ['Invoice Key', 'Status']]
+    #prep headers for output csv
+    headers = [field for field in reader.fieldnames if field not in ['Invoice Key', 'Status']]
 
-        #open output csv
-        with open(f'{current_date} overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
-            writer = csv.DictWriter(overdue_file, fieldnames=headers)
-            writer.writeheader()
+    #open output csv
+    with open(f'{current_date} overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
+        writer = csv.DictWriter(overdue_file, fieldnames=headers)
+        writer.writeheader()
 
-            for row in reader:
-                # skip rows that don't contain 'Awaiting Payment' in status column
-                if(row['Status'] != 'AwaitingPayment'):
+        for row in reader:
+            # skip rows that don't contain 'Awaiting Payment' in status column
+            if(row['Status'] != 'AwaitingPayment'):
+                continue
+
+            # check date
+            try:
+                due_date = datetime.strptime(row['Due Date'], '%Y-%m-%d').date()
+                if(due_date >= current_date):
                     continue
+            except ValueError:
+                # skip row if date format is incorrect
+                continue
+            
+            # remove unncecessary columns
+            del row['Invoice Key']
+            del row['Status']
 
-                # check date
-                try:
-                    due_date = datetime.strptime(row['Due Date'], '%Y-%m-%d').date()
-                    if(due_date >= current_date):
-                        continue
-                except ValueError:
-                    # skip row if date format is incorrect
-                    continue
-                
-                # remove unncecessary columns
-                del row['Invoice Key']
-                del row['Status']
-
-                # write row to output csv
-                writer.writerow(row)
+            # write row to output csv
+            writer.writerow(row)
     print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
 
 # run functions 
