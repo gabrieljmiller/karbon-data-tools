@@ -192,6 +192,14 @@ def get_inv_line_items():
     
     print("Spreadsheet with line items created.")
 
+def get_additional_payment_info(payment_key):
+    conn.request('GET', f'/v3/Payments/{payment_key}', payload, headers)
+    res = conn.getresponse()
+    data = res.read()
+    payment_json = json.loads(data.decode("utf-8"))
+    payment_method = payment_json.get('PaymentMethod', '')
+    return payment_method
+
 def get_inv_payments():
     # get payments for invoices
     print("Retrieving payments....")
@@ -206,7 +214,7 @@ def get_inv_payments():
             csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
 
             # prepare header row
-            csv_writer.writerow(['Invoice Number', 'Client', 'Street', 'City', 'State', 'Zipcode', 'Email', 'Invoice Total', 'Status', 'Due Date', 'Invoice Date', 'Payment Date', 'Payment Amount', 'Payment Type', 'Payment Key'])
+            csv_writer.writerow(['Invoice Number', 'Client', 'Street', 'City', 'State', 'Zipcode', 'Email', 'Invoice Total', 'Status', 'Due Date', 'Invoice Date', 'Payment Date', 'Payment Amount', 'Payment Type', 'Payment Key', 'Payment Method'])
 
             # start reading csv and getting invoice with key
             for row in csv_reader:
@@ -240,9 +248,10 @@ def get_inv_payments():
                     payment_amount = payment.get('Amount', '')
                     payment_type = payment.get('PaymentType', '')
                     payment_key = payment.get('PaymentKey', '')
+                    payment_method = get_additional_payment_info(payment_key)
 
                     # Write a new row for each payment with the original invoice details
-                    csv_writer.writerow([inv_no, client_name, street, city, state, zipcode, email, inv_total, status, due_date, inv_date, payment_date, payment_amount, payment_type, payment_key])
+                    csv_writer.writerow([inv_no, client_name, street, city, state, zipcode, email, inv_total, status, due_date, inv_date, payment_date, payment_amount, payment_type, payment_key,payment_method])
 
                 print(f"Processed invoice {inv_no} with {len(payments)} payments.")
             
@@ -295,6 +304,7 @@ if get_inv_input == "y":
     list_all_inv()
 if get_line_items_input == "y":
     get_inv_line_items()
+
 if filter_overdue_input == "y":
     filter_overdue()
 if get_payments_input == "y":
