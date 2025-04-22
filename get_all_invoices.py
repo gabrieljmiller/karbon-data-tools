@@ -4,9 +4,9 @@ import csv
 import urllib
 import os
 import sys
+import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
-
 
 # get base path depending on whether script is run from source or executable
 try:
@@ -294,11 +294,29 @@ def filter_overdue():
             writer.writerow(row)
     print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
 
+def count_clients(year, month):
+    # count number of individual clients served by month
+    df = pd.read_csv('invoices.csv')
+
+    # convert 'Invoice Date' to datetime
+    df['Invoice Date'] = pd.to_datetime(df['Invoice Date'])
+
+    # extract month and year from 'Invoice Date'
+    filtered = df[(df['Invoice Date'].dt.year == year) & (df['Invoice Date'].dt.month == month)]
+
+    # get unique clients
+    unique_clients = filtered['Client'].nunique()
+
+    print(f"Number of unique clients served in {month}/{year}: {unique_clients}")
+    return unique_clients
+
+
 # run functions 
 get_inv_input = input("Generate new base invoice list? (y/n):")
 get_line_items_input = input("Get line items? It will take much longer. (y/n):")
 filter_overdue_input = input("Create a csv with only overdue invoices? (y/n):")
 get_payments_input = input("Get payments for invoices? (y/n):")
+count_clients_input = input("Count number of clients served in a month? (y/n):")
 
 if get_inv_input == "y":
     list_all_inv()
@@ -309,3 +327,7 @@ if filter_overdue_input == "y":
     filter_overdue()
 if get_payments_input == "y":
     get_inv_payments()
+if count_clients_input == "y":
+    year = int(input("Enter year (YYYY): "))
+    month = int(input("Enter month (1-12): "))
+    count_clients(year, month)
