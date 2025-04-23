@@ -98,6 +98,7 @@ def list_all_inv():
     df = pd.DataFrame(all_rows)
     df.to_csv("invoices.csv", index=False, encoding="utf-8")
     print("CSV file 'invoices.csv' has been created.")
+    
 def get_inv_line_items():
     print("Retrieving line items...")
 
@@ -159,10 +160,9 @@ def get_inv_line_items():
         print(f"Processed invoice {row['Invoice Number']} with {len(line_items)} line items.")
 
     # Write all line items to CSV using pandas
-    output_filename = f"{date.today()} invoices_line_items.csv"
+    output_filename = f"{datetime.today()} invoices_line_items.csv"
     pd.DataFrame(line_item_rows).to_csv(output_filename, index=False, quoting=1, encoding="utf-8")
     print(f"Spreadsheet '{output_filename}' with line items created.")
-
 
 def get_additional_payment_info(payment_key):
     conn.request('GET', f'/v3/Payments/{payment_key}', payload, headers)
@@ -173,61 +173,54 @@ def get_additional_payment_info(payment_key):
     return payment_method
 
 def get_inv_payments():
-    # get payments for invoices
-    print("Retrieving payments....")
-    with open('invoices.csv', mode='r', encoding='utf-8-sig') as inv_no_file:
-        
-        # create csv reader and skip header row
-        csv_reader = csv.reader(inv_no_file)
-        next(csv_reader)
+    print("Retrieving payments...")
 
-        # create csv file to write
-        with open(f'{current_date} invoices_payments.csv', mode='w', newline='', encoding='utf-8') as new_file:
-            csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
+    # Load invoice data
+    df = pd.read_csv("invoices.csv", encoding="utf-8-sig")
 
-            # prepare header row
-            csv_writer.writerow(['Invoice Number', 'Client', 'Street', 'City', 'State', 'Zipcode', 'Email', 'Invoice Total', 'Status', 'Due Date', 'Invoice Date', 'Payment Date', 'Payment Amount', 'Payment Type', 'Payment Key', 'Payment Method'])
+    payment_rows = []
 
-            # start reading csv and getting invoice with key
-            for row in csv_reader:
-                inv_key = str(row[10]).strip()
-                inv_key_encoded = urllib.parse.quote(inv_key)
-                conn.request('GET', f'/v3/Invoices/{inv_key_encoded}?$expand=Payments', payload, headers)
-                res = conn.getresponse()
-                data = res.read()
-            
-                # Decode JSON response
-                json_data = json.loads(data.decode("utf-8"))
+    for _, row in df.iterrows():
+        inv_key = str(row["Invoice Key"]).strip()
+        inv_key_encoded = urllib.parse.quote(inv_key)
+        conn.request("GET", f"/v3/Invoices/{inv_key_encoded}?$expand=Payments", payload, headers)
+        res = conn.getresponse()
+        data = res.read()
+        json_data = json.loads(data.decode("utf-8"))
 
-                # get invoice info
-                inv_no = row[1]
-                client_name = row[0]
-                street = row[3]
-                city = row[4]
-                state = row[5]
-                zipcode = row[6]
-                inv_total = row[2]
-                status = row[7]
-                due_date = row[8]
-                inv_date = row[9]
-                email = row[10]
+        payments = json_data.get("Payments", [])
 
-                # Get payments
-                payments = json_data.get('Payments', [])
+        for payment in payments:
+            payment_date = payment.get("PaymentDate", "")
+            payment_amount = payment.get("Amount", "")
+            payment_type = payment.get("PaymentType", "")
+            payment_key = payment.get("PaymentKey", "")
+            payment_method = get_additional_payment_info(payment_key)
 
-                for payment in payments:
-                    payment_date = payment.get('PaymentDate', '')
-                    payment_amount = payment.get('Amount', '')
-                    payment_type = payment.get('PaymentType', '')
-                    payment_key = payment.get('PaymentKey', '')
-                    payment_method = get_additional_payment_info(payment_key)
+            payment_rows.append({
+                "Invoice Number": row["Invoice Number"],
+                "Client": row["Client"],
+                "Street": row["Street"],
+                "City": row["City"],
+                "State": row["State"],
+                "Zipcode": row["Zip"],
+                "Email": row["Email Address"],
+                "Invoice Total": row["Invoice Total"],
+                "Status": row["Status"],
+                "Due Date": row["Due Date"],
+                "Invoice Date": row["Invoice Date"],
+                "Payment Date": payment_date,
+                "Payment Amount": payment_amount,
+                "Payment Type": payment_type,
+                "Payment Key": payment_key,
+                "Payment Method": payment_method
+            })
 
-                    # Write a new row for each payment with the original invoice details
-                    csv_writer.writerow([inv_no, client_name, street, city, state, zipcode, email, inv_total, status, due_date, inv_date, payment_date, payment_amount, payment_type, payment_key,payment_method])
+        print(f"Processed invoice {row['Invoice Number']} with {len(payments)} payments.")
 
-                print(f"Processed invoice {inv_no} with {len(payments)} payments.")
-            
-    print("Spreadsheet with payments created.")
+    output_filename = f"{datetime.today()} invoices_payments.csv"
+    pd.DataFrame(payment_rows).to_csv(output_filename, index=False, quoting=1, encoding="utf-8")
+    print(f"Spreadsheet '{output_filename}' with payments created.")
 
 def filter_overdue():
     with open('invoices.csv',mode='r',encoding='utf-8') as inv_file:
