@@ -1,12 +1,12 @@
 import http.client
 import json
-import csv
 import urllib
 import os
 import sys
+import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
-
+from datetime import date
 
 # get base path depending on whether script is run from source or executable
 try:
@@ -33,167 +33,136 @@ headers = {
 current_date = datetime.now().date()
 
 def list_all_inv():
-    # gets all invoices in Karbon and gets address from contact instead of invoice. takes a while and spreadsheet needs filtered down to what you need
-
-    # Set up the connection and request
-    
-    # Prepare the CSV file to write
     print("Retrieving invoice list...")
-    with open('invoices.csv', mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
 
-        # Write header row
-        writer.writerow(['Client', 'Invoice Number','Invoice Total','Street','City','State','Zip','Status','Due Date','Invoice Date','Invoice Key','Email Address'])
+    all_rows = []
+    skip_value = 0
+    seen_invoice_keys = set()
 
-        skip_value = 0  # Start from the first page of invoices
-        seen_invoice_keys = set()  # To track already processed invoice keys
-        
-        while True:
-            # Make the request with the current $skip value
-            conn.request(f"GET", f"/v3/Invoices?$orderby=InvoiceDate&$top=100&$skip={skip_value}", payload, headers)
-            res = conn.getresponse()
-            data = res.read()
+    while True:
+        conn.request("GET", f"/v3/Invoices?$orderby=InvoiceDate&$top=100&$skip={skip_value}", payload, headers)
+        res = conn.getresponse()
+        data = res.read()
+        inv_list_json_data = json.loads(data)
+        invoices = inv_list_json_data.get("value", [])
 
-            # Decode JSON response
-            inv_list_json_data = json.loads(data)
+        if not invoices:
+            break
 
-            # Extract the invoices data from the JSON response
-            invoices = inv_list_json_data.get('value', [])
+        for invoice in invoices:
+            invoice_key = invoice.get("InvoiceKey", "")
+            if invoice_key in seen_invoice_keys:
+                continue
+            seen_invoice_keys.add(invoice_key)
 
-            # If there are no invoices returned, break the loop
-            if not invoices:
-                break
+            client = invoice.get("Client", {})
+            client_key = client.get("ClientKey", "")
 
-            for invoice in invoices:
+            # Fetch client info
+            conn.request("GET", f"/v3/Organizations/{client_key}?$expand=BusinessCards", payload, headers)
+            res2 = conn.getresponse()
+            data2 = res2.read()
+            inv_detail_json_data = json.loads(data2)
 
-                # Check if invoice already processed based on its InvoiceKey
-                invoice_key = invoice.get('InvoiceKey', '')
-                if invoice_key in seen_invoice_keys:
-                    continue  # Skip if we've already seen this invoice
-                
-                # Mark this invoice as processed
-                seen_invoice_keys.add(invoice_key)
+            business_cards = inv_detail_json_data.get("BusinessCards", [])
+            if business_cards and business_cards[0].get("Addresses"):
+                address = business_cards[0]["Addresses"][0]
+                address_lines = address.get("AddressLines", "")
+                city = address.get("City", "")
+                state = address.get("StateProvinceCounty", "")
+                zipcode = address.get("ZipCode", "")
+            else:
+                address_lines = city = state = zipcode = ""
 
-                # get client key
-                client = invoice.get('Client', {})
-                client_key = client.get('ClientKey','')
+            row = {
+                "Client": client.get("Name", ""),
+                "Invoice Number": invoice.get("InvoiceNumber", ""),
+                "Invoice Total": invoice.get("InvoiceTotal", ""),
+                "Street": address_lines,
+                "City": city,
+                "State": state,
+                "Zip": zipcode,
+                "Status": invoice.get("InvoiceStatus", ""),
+                "Due Date": invoice.get("PaymentDueDate", "").split("T")[0],
+                "Invoice Date": invoice.get("InvoiceDate", "").split("T")[0],
+                "Invoice Key": invoice_key,
+                "Email Address": client.get("EmailAddress", "")
+            }
 
-                # get client data
-                conn.request("GET", f"/v3/Organizations/{client_key}?$expand=BusinessCards", payload, headers)
-                res2 = conn.getresponse()
-                data2 = res2.read()
-                inv_detail_json_data = json.loads(data2)
+            all_rows.append(row)
+            print(f"{row['Invoice Number']}, {row['Client']}")
 
-                # get address fields from client data
-                business_card_list = inv_detail_json_data.get('BusinessCards',{})
-                if business_card_list:
-                    address_list = business_card_list[0].get('Addresses',{})
-                    address_lines = address_list[0].get('AddressLines','')
-                    city = address_list[0].get('City','')
-                    state = address_list[0].get('StateProvinceCounty','')
-                    zipcode = address_list[0].get('ZipCode','')
-                else:
-                    address_lines = ''
-                    city = ''
-                    state = ''
-                    zipcode = ''
+        skip_value += 100
 
-                # consolidate address into a 2-line string
-                full_address = f"{address_lines}\n{city} {state}, {zipcode}"
-
-                # declare vars for csv rows
-                invoice_number = invoice.get('InvoiceNumber', '')
-                client_name = client.get('Name', '')
-                total = invoice.get('InvoiceTotal', '')
-                status = invoice.get('InvoiceStatus', '')
-                due_date_raw = invoice.get('PaymentDueDate', '')
-                due_date_formatted = due_date_raw.split("T")[0]
-                invoice_date_raw = invoice.get('InvoiceDate', '')
-                invoice_date_formatted = invoice_date_raw.split("T")[0]
-                email = client.get('EmailAddress', '')
-
-                # Write each line item of an invoice as a separate row
-                writer.writerow([client_name, invoice_number, total, address_lines, city, state, zipcode, status, due_date_formatted, invoice_date_formatted, invoice_key, email])
-                print(f'{invoice_number}, {client_name}')
-
-            # Increase the skip value for the next batch of invoices
-            skip_value += 100
-
+    # Write to CSV using pandas
+    df = pd.DataFrame(all_rows)
+    df.to_csv("invoices.csv", index=False, encoding="utf-8")
     print("CSV file 'invoices.csv' has been created.")
-
+    
 def get_inv_line_items():
-    # get invoice with line items from invoice key from spreadsheet generated by list_all_inv function
-    print("Retrieving line items....")
-    with open('invoices.csv', mode='r', encoding='utf-8-sig') as inv_no_file:
-        
-        # create csv reader and skip header row
-        csv_reader = csv.reader(inv_no_file)
-        next(csv_reader)
+    print("Retrieving line items...")
 
-        # create csv file to write
-        with open(f'{current_date} invoices_line_items.csv', mode='w', newline='', encoding='utf-8') as new_file:
-            csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
+    # Load invoice list with pandas
+    df = pd.read_csv("invoices.csv", encoding="utf-8-sig")
 
-            # prepare header row
-            csv_writer.writerow(['Invoice Number', 'Client', 'Street', 'City', 'State', 'Zipcode', 'Email', 'Invoice Total', 'Status', 'Due Date', 'Invoice Date', 'Line Item Description', 'Line Item Total', 'Work Title','Work Type', 'Work URL'])
+    # Prepare list to collect all line items
+    line_item_rows = []
 
-            # start reading csv and getting invoice with key
-            for row in csv_reader:
-                inv_key = str(row[10]).strip()
-                inv_key_encoded = urllib.parse.quote(inv_key)
-                conn.request('GET', f'/v3/Invoices/{inv_key_encoded}?$expand=LineItems', payload, headers)
+    for _, row in df.iterrows():
+        inv_key = str(row["Invoice Key"]).strip()
+        inv_key_encoded = urllib.parse.quote(inv_key)
+        conn.request("GET", f"/v3/Invoices/{inv_key_encoded}?$expand=LineItems", payload, headers)
+        res = conn.getresponse()
+        data = res.read()
+        json_data = json.loads(data.decode("utf-8"))
+
+        line_items = json_data.get("LineItems", [])
+        for item in line_items:
+            billable_item_type = item.get("BillableItemType", "")
+            description = item.get("Description", "")
+            line_item_total = item.get("Amount", 0)
+
+            if billable_item_type in ("Entity", "TimeEntry"):
+                work_key = item.get("BillableItemEntityKey", "")
+                work_url = f"https://app2.karbonhq.com/YtfB1S5FYHG#/work/{work_key}/tasks"
+
+                conn.request("GET", f"/v3/WorkItems/{work_key}", payload, headers)
                 res = conn.getresponse()
                 data = res.read()
+                work_json = json.loads(data.decode("utf-8"))
+                work_title = work_json.get("Title", "")
+                work_type = work_json.get("WorkType", "")
+            else:
+                work_key = ""
+                work_url = ""
+                work_title = ""
+                work_type = ""
 
-                # Decode JSON response
-                json_data = json.loads(data.decode("utf-8"))
+            line_item_rows.append({
+                "Invoice Number": row["Invoice Number"],
+                "Client": row["Client"],
+                "Street": row["Street"],
+                "City": row["City"],
+                "State": row["State"],
+                "Zipcode": row["Zip"],
+                "Email": row["Email Address"],
+                "Invoice Total": row["Invoice Total"],
+                "Status": row["Status"],
+                "Due Date": row["Due Date"],
+                "Invoice Date": row["Invoice Date"],
+                "Line Item Description": description,
+                "Line Item Total": line_item_total,
+                "Work Title": work_title,
+                "Work Type": work_type,
+                "Work URL": work_url
+            })
 
-                # get invoice info
-                inv_no = row[1]
-                client_name = row[0]
-                street = row[3]
-                city = row[4]
-                state = row[5]
-                zipcode = row[6]
-                inv_total = row[2]
-                status = row[7]
-                due_date = row[8]
-                inv_date = row[9]
-                email = row[10]
+        print(f"Processed invoice {row['Invoice Number']} with {len(line_items)} line items.")
 
-                # Get line items (work items)
-                line_items = json_data.get('LineItems', [])
-                
-                for item in line_items:
-                    billable_item_type = item.get('BillableItemType', '')
-                    description = item.get('Description', '')
-                    line_item_total = item.get('Amount', 0)
-                    if billable_item_type == 'Entity' or billable_item_type == 'TimeEntry':
-                        work_key = item.get('BillableItemEntityKey', '')
-                        work_url = f'https://app2.karbonhq.com/YtfB1S5FYHG#/work/{work_key}/tasks'
-
-                        # get work item
-                        conn.request('GET', f'/v3/WorkItems/{work_key}', payload, headers)
-                        res = conn.getresponse()
-                        data = res.read()
-                        work_json = json.loads(data.decode("utf-8"))
-                        # print(work_json)
-
-                        # get work info
-                        work_title = work_json.get('Title', '')
-                        work_type = work_json.get('WorkType', '')
-                        # work_template = work_json.get('WorkTemplateTile', '') not working - typo is in documentation, returning as empty, probably Karbon issue
-                    else:
-                        work_url = ''
-                        work_title = ''
-                        work_type = ''
-                    
-                    # Write a new row for each line item with the original invoice details
-                    csv_writer.writerow([inv_no, client_name, street, city, state, zipcode, email, inv_total, status, due_date, inv_date, description, line_item_total, work_title, work_type, work_url])
-
-                print(f"Processed invoice {inv_no} with {len(line_items)} line items.")
-    
-    print("Spreadsheet with line items created.")
+    # Write all line items to CSV using pandas
+    output_filename = f"{datetime.today()} invoices_line_items.csv"
+    pd.DataFrame(line_item_rows).to_csv(output_filename, index=False, quoting=1, encoding="utf-8")
+    print(f"Spreadsheet '{output_filename}' with line items created.")
 
 def get_additional_payment_info(payment_key):
     conn.request('GET', f'/v3/Payments/{payment_key}', payload, headers)
@@ -204,108 +173,118 @@ def get_additional_payment_info(payment_key):
     return payment_method
 
 def get_inv_payments():
-    # get payments for invoices
-    print("Retrieving payments....")
-    with open('invoices.csv', mode='r', encoding='utf-8-sig') as inv_no_file:
-        
-        # create csv reader and skip header row
-        csv_reader = csv.reader(inv_no_file)
-        next(csv_reader)
+    print("Retrieving payments...")
 
-        # create csv file to write
-        with open(f'{current_date} invoices_payments.csv', mode='w', newline='', encoding='utf-8') as new_file:
-            csv_writer = csv.writer(new_file, quoting=csv.QUOTE_NONNUMERIC)
+    # Load invoice data
+    df = pd.read_csv("invoices.csv", encoding="utf-8-sig")
 
-            # prepare header row
-            csv_writer.writerow(['Invoice Number', 'Client', 'Street', 'City', 'State', 'Zipcode', 'Email', 'Invoice Total', 'Status', 'Due Date', 'Invoice Date', 'Payment Date', 'Payment Amount', 'Payment Type', 'Payment Key', 'Payment Method'])
+    payment_rows = []
 
-            # start reading csv and getting invoice with key
-            for row in csv_reader:
-                inv_key = str(row[10]).strip()
-                inv_key_encoded = urllib.parse.quote(inv_key)
-                conn.request('GET', f'/v3/Invoices/{inv_key_encoded}?$expand=Payments', payload, headers)
-                res = conn.getresponse()
-                data = res.read()
-            
-                # Decode JSON response
-                json_data = json.loads(data.decode("utf-8"))
+    for _, row in df.iterrows():
+        inv_key = str(row["Invoice Key"]).strip()
+        inv_key_encoded = urllib.parse.quote(inv_key)
+        conn.request("GET", f"/v3/Invoices/{inv_key_encoded}?$expand=Payments", payload, headers)
+        res = conn.getresponse()
+        data = res.read()
+        json_data = json.loads(data.decode("utf-8"))
 
-                # get invoice info
-                inv_no = row[1]
-                client_name = row[0]
-                street = row[3]
-                city = row[4]
-                state = row[5]
-                zipcode = row[6]
-                inv_total = row[2]
-                status = row[7]
-                due_date = row[8]
-                inv_date = row[9]
-                email = row[10]
+        payments = json_data.get("Payments", [])
 
-                # Get payments
-                payments = json_data.get('Payments', [])
+        for payment in payments:
+            payment_date = payment.get("PaymentDate", "")
+            payment_amount = payment.get("Amount", "")
+            payment_type = payment.get("PaymentType", "")
+            payment_key = payment.get("PaymentKey", "")
+            payment_method = get_additional_payment_info(payment_key)
 
-                for payment in payments:
-                    payment_date = payment.get('PaymentDate', '')
-                    payment_amount = payment.get('Amount', '')
-                    payment_type = payment.get('PaymentType', '')
-                    payment_key = payment.get('PaymentKey', '')
-                    payment_method = get_additional_payment_info(payment_key)
+            payment_rows.append({
+                "Invoice Number": row["Invoice Number"],
+                "Client": row["Client"],
+                "Street": row["Street"],
+                "City": row["City"],
+                "State": row["State"],
+                "Zipcode": row["Zip"],
+                "Email": row["Email Address"],
+                "Invoice Total": row["Invoice Total"],
+                "Status": row["Status"],
+                "Due Date": row["Due Date"],
+                "Invoice Date": row["Invoice Date"],
+                "Payment Date": payment_date,
+                "Payment Amount": payment_amount,
+                "Payment Type": payment_type,
+                "Payment Key": payment_key,
+                "Payment Method": payment_method
+            })
 
-                    # Write a new row for each payment with the original invoice details
-                    csv_writer.writerow([inv_no, client_name, street, city, state, zipcode, email, inv_total, status, due_date, inv_date, payment_date, payment_amount, payment_type, payment_key,payment_method])
+        print(f"Processed invoice {row['Invoice Number']} with {len(payments)} payments.")
 
-                print(f"Processed invoice {inv_no} with {len(payments)} payments.")
-            
-    print("Spreadsheet with payments created.")
+    output_filename = f"{datetime.today()} invoices_payments.csv"
+    pd.DataFrame(payment_rows).to_csv(output_filename, index=False, quoting=1, encoding="utf-8")
+    print(f"Spreadsheet '{output_filename}' with payments created.")
 
 def filter_overdue():
-    with open('invoices.csv',mode='r',encoding='utf-8') as inv_file:
-        reader = csv.DictReader(inv_file)
+    # Load invoice data
+    df = pd.read_csv("invoices.csv", encoding="utf-8")
 
-    #prep headers for output csv
-    headers = [field for field in reader.fieldnames if field not in ['Invoice Key', 'Status']]
+    # Filter: status is AwaitingPayment and due date is before today
+    df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
+    overdue_df = df[
+        (df["Status"] == "AwaitingPayment") &
+        (df["Due Date"].dt.date < date.today())
+    ]
 
-    #open output csv
-    with open(f'{current_date} overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
-        writer = csv.DictWriter(overdue_file, fieldnames=headers)
-        writer.writeheader()
+    # Drop unneeded columns
+    overdue_df = overdue_df.drop(columns=["Invoice Key", "Status"])
 
-        for row in reader:
-            # skip rows that don't contain 'Awaiting Payment' in status column
-            if(row['Status'] != 'AwaitingPayment'):
-                continue
+    # Save result
+    output_filename = f"{date.today()} overdue_invoices.csv"
+    overdue_df.to_csv(output_filename, index=False)
+    print(f"Overdue invoices filtered and saved to '{output_filename}'.")
 
-            # check date
-            try:
-                due_date = datetime.strptime(row['Due Date'], '%Y-%m-%d').date()
-                if(due_date >= current_date):
-                    continue
-            except ValueError:
-                # skip row if date format is incorrect
-                continue
-            
-            # remove unncecessary columns
-            del row['Invoice Key']
-            del row['Status']
+def count_clients(year, month):
+    # count number of individual clients served by month
+    df = pd.read_csv('invoices.csv')
 
-            # write row to output csv
-            writer.writerow(row)
-    print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
+    # convert 'Invoice Date' to datetime
+    df['Invoice Date'] = pd.to_datetime(df['Invoice Date'])
 
-# run functions 
-get_inv_input = input("Generate new base invoice list? (y/n):")
-get_line_items_input = input("Get line items? It will take much longer. (y/n):")
-filter_overdue_input = input("Create a csv with only overdue invoices? (y/n):")
-get_payments_input = input("Get payments for invoices? (y/n):")
+    # extract month and year from 'Invoice Date'
+    filtered = df[(df['Invoice Date'].dt.year == year) & (df['Invoice Date'].dt.month == month)]
 
-if get_inv_input == "y":
-    list_all_inv()
-if get_line_items_input == "y":
-    get_inv_line_items()
+    # get unique clients
+    unique_clients = filtered['Client'].nunique()
 
-if filter_overdue_input == "y":
-    filter_overdue()
-if get_payments_input == "y":
-    get_inv_payments()
+    print(f"Number of unique clients served in {month}/{year}: {unique_clients}")
+    return unique_clients
+
+
+def main():
+    options = {
+        "1": ("Generate new base invoice list", list_all_inv),
+        "2": ("Get line items (slow)", get_inv_line_items),
+        "3": ("Create CSV with overdue invoices", filter_overdue),
+        "4": ("Get payments for invoices", get_inv_payments),
+        "5": ("Count clients served in a month", count_clients_prompt)
+    }
+
+    print("\nAvailable Actions:")
+    for key, (desc, _) in options.items():
+        print(f"{key}. {desc}")
+
+    choices = input("\nEnter the numbers of the tasks you want to run (e.g. 1 3 5): ").split()
+
+    for choice in choices:
+        action = options.get(choice)
+        if action:
+            print(f"\nRunning: {action[0]}")
+            action[1]()
+        else:
+            print(f"Invalid option: {choice}")
+
+def count_clients_prompt():
+    year = int(input("Enter year (YYYY): "))
+    month = int(input("Enter month (1-12): "))
+    count_clients(year, month)
+
+if __name__ == "__main__":
+    main()
