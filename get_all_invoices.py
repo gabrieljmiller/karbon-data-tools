@@ -7,6 +7,7 @@ import sys
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
+from datetime import date
 
 # get base path depending on whether script is run from source or executable
 try:
@@ -223,38 +224,23 @@ def get_inv_payments():
     print(f"Spreadsheet '{output_filename}' with payments created.")
 
 def filter_overdue():
-    with open('invoices.csv',mode='r',encoding='utf-8') as inv_file:
-        reader = csv.DictReader(inv_file)
+    # Load invoice data
+    df = pd.read_csv("invoices.csv", encoding="utf-8")
 
-    #prep headers for output csv
-    headers = [field for field in reader.fieldnames if field not in ['Invoice Key', 'Status']]
+    # Filter: status is AwaitingPayment and due date is before today
+    df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
+    overdue_df = df[
+        (df["Status"] == "AwaitingPayment") &
+        (df["Due Date"].dt.date < date.today())
+    ]
 
-    #open output csv
-    with open(f'{current_date} overdue_invoices.csv', mode='w', newline='', encoding='utf-8') as overdue_file:
-        writer = csv.DictWriter(overdue_file, fieldnames=headers)
-        writer.writeheader()
+    # Drop unneeded columns
+    overdue_df = overdue_df.drop(columns=["Invoice Key", "Status"])
 
-        for row in reader:
-            # skip rows that don't contain 'Awaiting Payment' in status column
-            if(row['Status'] != 'AwaitingPayment'):
-                continue
-
-            # check date
-            try:
-                due_date = datetime.strptime(row['Due Date'], '%Y-%m-%d').date()
-                if(due_date >= current_date):
-                    continue
-            except ValueError:
-                # skip row if date format is incorrect
-                continue
-            
-            # remove unncecessary columns
-            del row['Invoice Key']
-            del row['Status']
-
-            # write row to output csv
-            writer.writerow(row)
-    print("Overdue invoices filtered and saved to 'overdue_invoices.csv'.")
+    # Save result
+    output_filename = f"{date.today()} overdue_invoices.csv"
+    overdue_df.to_csv(output_filename, index=False)
+    print(f"Overdue invoices filtered and saved to '{output_filename}'.")
 
 def count_clients(year, month):
     # count number of individual clients served by month
