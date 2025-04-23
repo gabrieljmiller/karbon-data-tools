@@ -1,6 +1,5 @@
 import http.client
 import json
-import csv
 import urllib
 import os
 import sys
@@ -259,23 +258,33 @@ def count_clients(year, month):
     return unique_clients
 
 
-# run functions 
-get_inv_input = input("Generate new base invoice list? (y/n):")
-get_line_items_input = input("Get line items? It will take much longer. (y/n):")
-filter_overdue_input = input("Create a csv with only overdue invoices? (y/n):")
-get_payments_input = input("Get payments for invoices? (y/n):")
-count_clients_input = input("Count number of clients served in a month? (y/n):")
+def main():
+    options = {
+        "1": ("Generate new base invoice list", list_all_inv),
+        "2": ("Get line items (slow)", get_inv_line_items),
+        "3": ("Create CSV with overdue invoices", filter_overdue),
+        "4": ("Get payments for invoices", get_inv_payments),
+        "5": ("Count clients served in a month", count_clients_prompt)
+    }
 
-if get_inv_input == "y":
-    list_all_inv()
-if get_line_items_input == "y":
-    get_inv_line_items()
+    print("\nAvailable Actions:")
+    for key, (desc, _) in options.items():
+        print(f"{key}. {desc}")
 
-if filter_overdue_input == "y":
-    filter_overdue()
-if get_payments_input == "y":
-    get_inv_payments()
-if count_clients_input == "y":
+    choices = input("\nEnter the numbers of the tasks you want to run (e.g. 1 3 5): ").split()
+
+    for choice in choices:
+        action = options.get(choice)
+        if action:
+            print(f"\nRunning: {action[0]}")
+            action[1]()
+        else:
+            print(f"Invalid option: {choice}")
+
+def count_clients_prompt():
     year = int(input("Enter year (YYYY): "))
     month = int(input("Enter month (1-12): "))
     count_clients(year, month)
+
+if __name__ == "__main__":
+    main()
