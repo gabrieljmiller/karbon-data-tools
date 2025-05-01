@@ -160,7 +160,7 @@ def get_inv_line_items():
         print(f"Processed invoice {row['Invoice Number']} with {len(line_items)} line items.")
 
     # Write all line items to CSV using pandas
-    output_filename = f"{datetime.today()} invoices_line_items.csv"
+    output_filename = f"{datetime.today().strftime('%Y-%m-%d')} invoices_line_items.csv"
     pd.DataFrame(line_item_rows).to_csv(output_filename, index=False, quoting=1, encoding="utf-8")
     print(f"Spreadsheet '{output_filename}' with line items created.")
 
