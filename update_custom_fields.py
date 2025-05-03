@@ -22,4 +22,16 @@ def get_description(org_key):
     description = resp_json.get("EntityDescription", {}).get("Text", "")
     return description
 
+# def list_custom_fields():
+    # LIST CUSTOM FIELDS TO GET THE KEYS
+
+
 print(get_description("3R9lghymWNgZ"))
+
+
+## Steps
+# get list of keys from spreadsheet
+# for each key:
+# get the description
+# check if custom fields are empty
+# for each field, it empty, get value from description and update
