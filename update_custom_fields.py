@@ -22,11 +22,20 @@ def get_description(org_key):
     description = resp_json.get("EntityDescription", {}).get("Text", "")
     return description
 
-# def list_custom_fields():
-    # LIST CUSTOM FIELDS TO GET THE KEYS
+def list_custom_fields():
+    conn.request("GET", f"/v3/CustomFields", payload, headers)
+    res = conn.getresponse()
+    data = res.read()
+    resp_json = json.loads(data.decode("utf-8"))
+    cf_keys = []
+    cf_names = []
+    for cf in resp_json["value"]:
+        cf_keys.append(cf["Key"])
+        cf_names.append(cf["Name"])
+    cf_mp = dict(zip(cf_names, cf_keys))
+    return cf_mp
 
-
-print(get_description("3R9lghymWNgZ"))
+print(list_custom_fields())
 
 
 ## Steps
