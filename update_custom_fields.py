@@ -35,11 +35,16 @@ def list_custom_fields():
     cf_mp = dict(zip(cf_names, cf_keys))
     return cf_mp
 
-print(list_custom_fields())
-
+def get_custom_fields(org_key):
+    conn.request("GET", f"/v3/CustomFieldValues/{org_key}", payload, headers)
+    res = conn.getresponse()
+    data = res.read()
+    resp_json = json.loads(data.decode("utf-8"))
+    return resp_json
+print(get_custom_fields("3D19QFF49Q6J"))
 
 ## Steps
-# get list of keys from spreadsheet
+# get list of org keys from spreadsheet
 # for each key:
 # get the description
 # check if custom fields are empty
