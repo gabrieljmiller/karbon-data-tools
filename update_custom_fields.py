@@ -76,43 +76,49 @@ def get_cf_value(data:dict, cf_name:str):
     return None
 
 def update_qb_admin_password(org_key):
-    # check if field is empty
-    custom_fields_mp = get_custom_fields(org_key)
-    qb_admin_password = get_cf_value(custom_fields_mp, "QB Admin Password")
-    
-    if qb_admin_password == []:
-        description = get_description(org_key)
-        cf_values = extract_cf_from_description(description)
-        qb_admin_password = cf_values.get("admin_password")
-        if qb_admin_password:
-            print(qb_admin_password)
-        else:
-            print("No QB Admin Password found in description")
-            return
-        payload = {
-            "EntityKey": org_key,
-            "CustomFieldValues": [
-                {
-                    "Key":   "bT3FHvnxFCg",               # e.g. "ZGNGtYyLm4z"
-                    "Name":  "QB Admin Password",
-                    "Type":  "Text",               # field type in Karbon
-                    "Value": qb_admin_password             # Text fields expect a plain string
-                }
-            ]
-        }
-        body = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-        
-        conn.request("PUT", f"/v3/CustomFieldValues/{org_key}", body, headers)
-        res = conn.getresponse()
-        print(f"Update status: {res.status} {res.reason}")
+    # 1. Get current value
+    current = get_cf_value(get_custom_fields(org_key), "QB Admin Password")
+    if current:                      # already set → bail out
+        print(f"Field already populated: {current}")
         return
+
+    # 2. Pull it from the description
+    description  = get_description(org_key)
+    new_pw       = extract_cf_from_description(description).get("admin_password")
+    if not new_pw:
+        print("No QB Admin Password found in description")
+        return
+
+    # 3. Build Karbon‑compliant payload
+    payload = {
+        "EntityKey": org_key,
+        "CustomFieldValues": [
+            {
+                "Key":   "bT3FHvnxFCg",          # key of the CF definition
+                "Name":  "QB Admin Password",
+                "Type":  "Text",
+                "Value": [new_pw]                # ← must be a list
+            }
+        ]
+    }
+    body = json.dumps(payload).encode("utf-8")   # bytes
+    headers["Content-Type"] = "application/json" # add/overwrite
+
+    # 4. Send request
+    conn.request("PUT",
+                 f"/v3/CustomFieldValues/{org_key}",
+                 body=body,
+                 headers=headers)
+
+    res = conn.getresponse()
+    print(f"Update status: {res.status} {res.reason}")
+    print(res.read().decode())
         
 
 
 df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
     
-update_qb_admin_password("7yXq7DfPPrm")  
+update_qb_admin_password("7cQ25cf3hJl")  
 
 # print(list_custom_fields())
 
