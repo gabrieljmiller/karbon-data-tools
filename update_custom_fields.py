@@ -35,6 +35,10 @@ def get_description(org_key):
     res = conn.getresponse()
     data = res.read()
     resp_json = json.loads(data.decode("utf-8"))
+    if "EntityDescription" not in resp_json:
+        print(f"No description found for {org_key}")
+        return None
+    
     description = resp_json.get("EntityDescription", {}).get("Text", "")
     return description
 
@@ -117,8 +121,16 @@ def update_qb_admin_password(org_key):
 
 
 df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
-    
-update_qb_admin_password("7cQ25cf3hJl")  
+
+for _, row in df.iterrows():                # loop through every row
+    org_key  = row["Key"]
+    org_name = row["Name"]
+
+    if pd.isna(org_key):                    # skip blank keys, just in case
+        continue
+
+    print(f"Updating → {org_name}  ({org_key})")
+    update_qb_admin_password(org_key)
 
 # print(list_custom_fields())
 
