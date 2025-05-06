@@ -30,17 +30,35 @@ _PATTERNS = {
 }
 
 
-def get_description(org_key):
-    conn.request("GET", f"/v3/Organizations/{org_key}", payload, headers)
-    res = conn.getresponse()
-    data = res.read()
-    resp_json = json.loads(data.decode("utf-8"))
-    if "EntityDescription" not in resp_json:
-        print(f"No description found for {org_key}")
-        return None
-    
-    description = resp_json.get("EntityDescription", {}).get("Text", "")
-    return description
+def get_description(org_key: str) -> str:
+    conn.request("GET", f"/v3/Organizations/{org_key}", headers=headers)
+    res  = conn.getresponse()
+    body = res.read()
+
+    # ----- 1) non‑200 means org is missing or forbidden -------------------
+    if res.status != 200:
+        print(f"  ⚠️  {org_key}: GET /Organizations → {res.status}")
+        return ""
+
+    # ----- 2) empty body or the literal word 'null' -----------------------
+    if not body or body.strip() == b"null":
+        print(f"  ⚠️  {org_key}: organisation record is empty")
+        return ""
+
+    # ----- 3) decode JSON safely -----------------------------------------
+    try:
+        resp_json = json.loads(body.decode("utf‑8"))
+    except json.JSONDecodeError:
+        print(f"  ⚠️  {org_key}: invalid JSON in response")
+        return ""
+
+    # ----- 4) dig out the description if present -------------------------
+    entity_desc = resp_json.get("EntityDescription") or {}
+    text = entity_desc.get("Text", "")
+
+    if not text:
+        print(f"  ℹ️  {org_key}: no description field")
+    return text
 
 def list_custom_fields():
     conn.request("GET", f"/v3/CustomFields", payload, headers)
@@ -88,6 +106,9 @@ def update_qb_admin_password(org_key):
 
     # 2. Pull it from the description
     description  = get_description(org_key)
+    if description is None:
+        print(f"No description found for {org_key}")
+        return
     new_pw       = extract_cf_from_description(description).get("admin_password")
     if not new_pw:
         print("No QB Admin Password found in description")
