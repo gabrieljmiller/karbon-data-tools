@@ -18,10 +18,17 @@ headers = {
 
 # one regex per label, anchored to “start of line” to avoid false matches
 _PATTERNS = {
-    "accounting_software": re.compile(r"^Accounting Software\s*:\s*([^\r\n]+)", re.I | re.M),
-    "admin_password":      re.compile(r"^Admin Password\s*:\s*([^\r\n]+)",   re.I | re.M),
-    "ras_id":              re.compile(r"^RAS ID\s*:\s*([^\r\n]+)",           re.I | re.M),
+    "accounting_software": re.compile(
+        r"^Accounting Software[ \t]*:[ \t]*([^\r\n]*)", re.I | re.M
+    ),
+    "admin_password": re.compile(
+        r"^Admin Password[ \t]*:[ \t]*([^\r\n]*)",      re.I | re.M
+    ),
+    "ras_id": re.compile(
+        r"^RAS ID[ \t]*:[ \t]*([^\r\n]*)",              re.I | re.M
+    ),
 }
+
 
 def get_description(org_key):
     conn.request("GET", f"/v3/Organizations/{org_key}", payload, headers)
@@ -51,11 +58,15 @@ def get_custom_fields(org_key):
     resp_json = json.loads(data.decode("utf-8"))
     return resp_json
 
-def extract_cf_from_description(description):
+def extract_cf_from_description(description: str) -> dict[str, str | None]:
     out = {}
     for key, pattern in _PATTERNS.items():
         m = pattern.search(description)
-        out[key] = m.group(1).strip() if m else None
+        if m:
+            val = m.group(1).strip()           # '' if nothing after colon
+            out[key] = val or None             # turn '' into None
+        else:
+            out[key] = None
     return out
 
 def get_cf_value(data:dict, cf_name:str):
@@ -69,17 +80,23 @@ def update_qb_admin_password(org_key):
     custom_fields_mp = get_custom_fields(org_key)
     qb_admin_password = get_cf_value(custom_fields_mp, "QB Admin Password")
     
-    if qb_admin_password == "":
+    if qb_admin_password == []:
         description = get_description(org_key)
         cf_values = extract_cf_from_description(description)
-        qb_admin_password = cf_values.get("QB Admin Password")
+        qb_admin_password = cf_values.get("admin_password")
         if qb_admin_password:
             print(qb_admin_password)
+        else:
+            print("No QB Admin Password found in description")
+            return
+    else:
+        print(qb_admin_password)
+        return
 
 
 df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
     
-update_qb_admin_password("2VM8k9XRBkJw")  
+update_qb_admin_password("7yXq7DfPPrm")  
 
 
 
