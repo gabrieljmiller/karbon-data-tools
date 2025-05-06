@@ -89,16 +89,32 @@ def update_qb_admin_password(org_key):
         else:
             print("No QB Admin Password found in description")
             return
-    else:
-        print(qb_admin_password)
+        payload = {
+            "EntityKey": org_key,
+            "CustomFieldValues": [
+                {
+                    "Key":   "bT3FHvnxFCg",               # e.g. "ZGNGtYyLm4z"
+                    "Name":  "QB Admin Password",
+                    "Type":  "Text",               # field type in Karbon
+                    "Value": qb_admin_password             # Text fields expect a plain string
+                }
+            ]
+        }
+        body = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        
+        conn.request("PUT", f"/v3/CustomFieldValues/{org_key}", body, headers)
+        res = conn.getresponse()
+        print(f"Update status: {res.status} {res.reason}")
         return
+        
 
 
 df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
     
 update_qb_admin_password("7yXq7DfPPrm")  
 
-
+# print(list_custom_fields())
 
 ## Steps
 # get list of org keys from spreadsheet
