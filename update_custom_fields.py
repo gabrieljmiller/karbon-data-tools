@@ -139,21 +139,64 @@ def update_qb_admin_password(org_key):
     print(f"Update status: {res.status} {res.reason}")
     print(res.read().decode())
         
+def update_accounting_software(org_key):
+    ## NOTE this does not work because this field is limited to 4 values
+    # 1. Get current value
+    current = get_cf_value(get_custom_fields(org_key), "Accounting Software")
+    if current:                      # already set → bail out
+        print(f"Field already populated: {current}")
+        return
 
+    # 2. Pull it from the description
+    description  = get_description(org_key)
+    if description is None:
+        print(f"No description found for {org_key}")
+        return
+    new_pw       = extract_cf_from_description(description).get("accounting_software")
+    if not new_pw:
+        print("No Accounting Software found in description")
+        return
 
-df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
+    # 3. Build Karbon‑compliant payload
+    payload = {
+        "EntityKey": org_key,
+        "CustomFieldValues": [
+            {
+                "Key":   "36yxh2LSmwRY",          # key of the CF definition
+                "Name":  "Accounting Software",
+                "Type":  "Text",
+                "Value": [new_pw]                # ← must be a list
+            }
+        ]
+    }
+    body = json.dumps(payload).encode("utf-8")   # bytes
+    headers["Content-Type"] = "application/json" # add/overwrite
 
-for _, row in df.iterrows():                # loop through every row
-    org_key  = row["Key"]
-    org_name = row["Name"]
+    # 4. Send request
+    conn.request("PUT",
+                 f"/v3/CustomFieldValues/{org_key}",
+                 body=body,
+                 headers=headers)
 
-    if pd.isna(org_key):                    # skip blank keys, just in case
-        continue
+    res = conn.getresponse()
+    print(f"Update status: {res.status} {res.reason}")
+    print(res.read().decode())
 
-    print(f"Updating → {org_name}  ({org_key})")
-    update_qb_admin_password(org_key)
+def main():
+    df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
+
+    for _, row in df.iterrows():                # loop through every row
+        org_key  = row["Key"]
+        org_name = row["Name"]
+
+        if pd.isna(org_key):                    # skip blank keys, just in case
+            continue
+
+        print(f"Updating → {org_name}  ({org_key})")
+        update_qb_admin_password(org_key)
 
 # print(list_custom_fields())
+main()
 
 ## Steps
 # get list of org keys from spreadsheet
