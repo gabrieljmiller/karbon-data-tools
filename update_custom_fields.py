@@ -223,7 +223,7 @@ def update_ras_id(org_key):
     print(f"Update status: {res.status} {res.reason}")
     print(res.read().decode())
 
-def update_from_csv(org_name):
+def update_from_csv(org_name, org_key):
     # get values from csv
     df = pd.read_csv("custom_fields_to_update.csv", encoding="utf-8-sig")
     match = df[df["Account Name"] == org_name]
@@ -232,11 +232,48 @@ def update_from_csv(org_name):
         return None
     
     fields = ['Entity Type', 'Back Up Method', 'Closing Date Password']
-    return match[fields].iloc[0].to_dict()
+    
+    entity_type = match['Entity Type'].iloc[0]
+    backup_method = match['Back Up Method'].iloc[0]
+    closing_date_password = match['Closing Date Password'].iloc[0]
 
     #build payload
+    payload = {
+        "EntityKey": org_key,
+        "CustomFieldValues": [
+            {
+                "Key":   "DRrWHybmW1V", 
+                "Name":  "Backup Method",
+                "Type":  "Text",
+                "Value": [backup_method]
+            },
+            {
+                "Key":   "fb94WsjszXM", 
+                "Name":  "Entity Type",
+                "Type":  "Text",
+                "Value": [entity_type]
+            },
+            {
+                "Key":   "475VWXWV6Rm8",
+                "Name":  "Closing Date Password",
+                "Type":  "Text",
+                "Value": [closing_date_password]
+            }
+        ]
+    }
 
     # send request
+    body = json.dumps(payload).encode("utf-8")
+    headers["Content-Type"] = "application/json"
+
+    conn.request("PUT",
+                 f"/v3/CustomFieldValues/{org_key}",
+                 body=body,
+                 headers=headers)
+    
+    res = conn.getresponse()
+    print(f"Update status: {res.status} {res.reason}")
+    print(res.read().decode())
 
 def main():
     df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
@@ -252,8 +289,8 @@ def main():
         # update_qb_admin_password(org_key)
         update_ras_id(org_key)
 
-# print(list_custom_fields())
-main()
+print(list_custom_fields())
+# main()
 
 ## Steps
 # get list of org keys from spreadsheet
