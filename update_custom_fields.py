@@ -29,7 +29,6 @@ _PATTERNS = {
     ),
 }
 
-
 def get_description(org_key: str) -> str:
     conn.request("GET", f"/v3/Organizations/{org_key}", headers=headers)
     res  = conn.getresponse()
@@ -223,6 +222,21 @@ def update_ras_id(org_key):
     res = conn.getresponse()
     print(f"Update status: {res.status} {res.reason}")
     print(res.read().decode())
+
+def update_from_csv(org_name):
+    # get values from csv
+    df = pd.read_csv("custom_fields_to_update.csv", encoding="utf-8-sig")
+    match = df[df["Account Name"] == org_name]
+
+    if match.empty:
+        return None
+    
+    fields = ['Entity Type', 'Back Up Method', 'Closing Date Password']
+    return match[fields].iloc[0].to_dict()
+
+    #build payload
+
+    # send request
 
 def main():
     df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
