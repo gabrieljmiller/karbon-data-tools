@@ -235,7 +235,6 @@ def update_from_csv(org_name, org_key):
     
     entity_type = match['Entity Type'].iloc[0]
     backup_method = match['Back Up Method'].iloc[0]
-    closing_date_password = match['Closing Date Password'].iloc[0]
 
     #build payload
     payload = {
@@ -250,14 +249,8 @@ def update_from_csv(org_name, org_key):
             {
                 "Key":   "fb94WsjszXM", 
                 "Name":  "Entity Type",
-                "Type":  "Text",
+                "Type":  "List: Single",
                 "Value": [entity_type]
-            },
-            {
-                "Key":   "475VWXWV6Rm8",
-                "Name":  "Closing Date Password",
-                "Type":  "Text",
-                "Value": [closing_date_password]
             }
         ]
     }
@@ -287,10 +280,10 @@ def main():
 
         print(f"Updating → {org_name}  ({org_key})")
         # update_qb_admin_password(org_key)
-        update_ras_id(org_key)
+        update_from_csv(org_name, org_key)
 
-print(list_custom_fields())
-# main()
+# print(list_custom_fields())
+main()
 
 ## Steps
 # get list of org keys from spreadsheet
