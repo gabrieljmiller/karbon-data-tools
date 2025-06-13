@@ -9,10 +9,10 @@ from datetime import datetime
 from datetime import date
 
 # get base path depending on whether script is run from source or executable
-try:
-    base_path = os.path.dirname(sys.executable)
-except Exception:
-    base_path = os.path.dirname(os.path.abspath(__file__))
+#try:
+   # base_path = os.path.dirname(sys.executable)
+#except Exception:
+base_path = os.path.dirname(os.path.abspath(__file__))
 
 # Path to the .env file in the same directory as the executable/script
 env_path = os.path.join(base_path, '.env')
@@ -20,6 +20,11 @@ print(f'env path: {env_path}')
 
 # Load environment variables from the .env file
 load_dotenv(dotenv_path=env_path)
+
+if not os.getenv("bearer_token") or not os.getenv("access_key"):
+    print("Missing bearer_token or access_key in .env")
+    sys.exit(1)
+
 
 conn = http.client.HTTPSConnection("api.karbonhq.com")
 payload = ''
