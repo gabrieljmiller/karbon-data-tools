@@ -240,16 +240,16 @@ def update_from_csv(org_name, org_key):
     payload = {
         "EntityKey": org_key,
         "CustomFieldValues": [
-            {
-                "Key":   "DRrWHybmW1V", 
-                "Name":  "Backup Method",
-                "Type":  "Text",
-                "Value": [backup_method]
-            },
+            # {
+            #     "Key":   "DRrWHybmW1V", 
+            #     "Name":  "Backup Method",
+            #     "Type":  "Text",
+            #     "Value": [backup_method]
+            # },
             {
                 "Key":   "fb94WsjszXM", 
                 "Name":  "Entity Type",
-                "Type":  "List: Single",
+                "Type":  "ListSingleSelect",
                 "Value": [entity_type]
             }
         ]
