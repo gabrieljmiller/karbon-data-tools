@@ -223,7 +223,7 @@ def get_inv_payments():
 
         print(f"Processed invoice {row['Invoice Number']} with {len(payments)} payments.")
 
-    output_filename = f"{datetime.today()} invoices_payments.csv"
+    output_filename = f"{datetime.today().strftime('%Y-%m-%d')} invoice_payments.csv"
     pd.DataFrame(payment_rows).to_csv(output_filename, index=False, quoting=1, encoding="utf-8")
     print(f"Spreadsheet '{output_filename}' with payments created.")
 
