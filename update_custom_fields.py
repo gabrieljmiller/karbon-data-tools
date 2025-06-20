@@ -29,7 +29,6 @@ _PATTERNS = {
     ),
 }
 
-
 def get_description(org_key: str) -> str:
     conn.request("GET", f"/v3/Organizations/{org_key}", headers=headers)
     res  = conn.getresponse()
@@ -139,21 +138,152 @@ def update_qb_admin_password(org_key):
     print(f"Update status: {res.status} {res.reason}")
     print(res.read().decode())
         
+def update_accounting_software(org_key):
+    ## NOTE this does not work because this field is limited to 4 values
+    # 1. Get current value
+    current = get_cf_value(get_custom_fields(org_key), "Accounting Software")
+    if current:                      # already set → bail out
+        print(f"Field already populated: {current}")
+        return
 
+    # 2. Pull it from the description
+    description  = get_description(org_key)
+    if description is None:
+        print(f"No description found for {org_key}")
+        return
+    new_pw       = extract_cf_from_description(description).get("accounting_software")
+    if not new_pw:
+        print("No Accounting Software found in description")
+        return
 
-df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
+    # 3. Build Karbon‑compliant payload
+    payload = {
+        "EntityKey": org_key,
+        "CustomFieldValues": [
+            {
+                "Key":   "36yxh2LSmwRY",          # key of the CF definition
+                "Name":  "Accounting Software",
+                "Type":  "Text",
+                "Value": [new_pw]                # ← must be a list
+            }
+        ]
+    }
+    body = json.dumps(payload).encode("utf-8")   # bytes
+    headers["Content-Type"] = "application/json" # add/overwrite
 
-for _, row in df.iterrows():                # loop through every row
-    org_key  = row["Key"]
-    org_name = row["Name"]
+    # 4. Send request
+    conn.request("PUT",
+                 f"/v3/CustomFieldValues/{org_key}",
+                 body=body,
+                 headers=headers)
 
-    if pd.isna(org_key):                    # skip blank keys, just in case
-        continue
+    res = conn.getresponse()
+    print(f"Update status: {res.status} {res.reason}")
+    print(res.read().decode())
 
-    print(f"Updating → {org_name}  ({org_key})")
-    update_qb_admin_password(org_key)
+def update_ras_id(org_key):
+    # 1. Get current value
+    current = get_cf_value(get_custom_fields(org_key), "RAS ID")
+    if current:                      # already set → bail out
+        print(f"Field already populated: {current}")
+        return
+
+    # 2. Pull it from the description
+    description  = get_description(org_key)
+    if description is None:
+        print(f"No description found for {org_key}")
+        return
+    new_pw       = extract_cf_from_description(description).get("ras_id")
+    if not new_pw:
+        print("No RAS ID found in description")
+        return
+
+    # 3. Build Karbon‑compliant payload
+    payload = {
+        "EntityKey": org_key,
+        "CustomFieldValues": [
+            {
+                "Key":   "3gBCy74scz6T",          # key of the CF definition
+                "Name":  "RAS ID",
+                "Type":  "Text",
+                "Value": [new_pw]                # ← must be a list
+            }
+        ]
+    }
+    body = json.dumps(payload).encode("utf-8")   # bytes
+    headers["Content-Type"] = "application/json" # add/overwrite
+
+    # 4. Send request
+    conn.request("PUT",
+                 f"/v3/CustomFieldValues/{org_key}",
+                 body=body,
+                 headers=headers)
+
+    res = conn.getresponse()
+    print(f"Update status: {res.status} {res.reason}")
+    print(res.read().decode())
+
+def update_from_csv(org_name, org_key):
+    # get values from csv
+    df = pd.read_csv("custom_fields_to_update.csv", encoding="utf-8-sig")
+    match = df[df["Account Name"] == org_name]
+
+    if match.empty:
+        return None
+    
+    fields = ['Entity Type', 'Back Up Method', 'Closing Date Password']
+    
+    entity_type = match['Entity Type'].iloc[0]
+    backup_method = match['Back Up Method'].iloc[0]
+
+    #build payload
+    payload = {
+        "EntityKey": org_key,
+        "CustomFieldValues": [
+            # {
+            #     "Key":   "DRrWHybmW1V", 
+            #     "Name":  "Backup Method",
+            #     "Type":  "Text",
+            #     "Value": [backup_method]
+            # },
+            {
+                "Key":   "fb94WsjszXM", 
+                "Name":  "Entity Type",
+                "Type":  "ListSingleSelect",
+                "Value": [entity_type]
+            }
+        ]
+    }
+
+    # send request
+    body = json.dumps(payload).encode("utf-8")
+    headers["Content-Type"] = "application/json"
+
+    conn.request("PUT",
+                 f"/v3/CustomFieldValues/{org_key}",
+                 body=body,
+                 headers=headers)
+    
+    res = conn.getresponse()
+    print(f"Update status: {res.status} {res.reason}")
+    print(res.read().decode())
+
+def main():
+    df = pd.read_csv("organizations.csv", encoding="utf-8-sig")
+
+    for _, row in df.iterrows():                # loop through every row
+        org_key  = row["Key"]
+        org_name = row["Name"]
+
+        if pd.isna(org_key):                    # skip blank keys, just in case
+            continue
+
+        print(f"Updating → {org_name}  ({org_key})")
+        # update_qb_admin_password(org_key)
+        update_from_csv(org_name, org_key)
 
 # print(list_custom_fields())
+main()
 
 ## Steps
 # get list of org keys from spreadsheet
