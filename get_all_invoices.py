@@ -1,6 +1,6 @@
 import http.client
 import json
-import urllib
+import urllib.parse
 import os
 import sys
 import pandas as pd
@@ -8,10 +8,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 from datetime import date
 
-# get base path depending on whether script is run from source or executable
-#try:
-   # base_path = os.path.dirname(sys.executable)
-#except Exception:
 base_path = os.path.dirname(os.path.abspath(__file__))
 
 # Path to the .env file in the same directory as the executable/script
