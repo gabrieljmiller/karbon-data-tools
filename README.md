@@ -51,3 +51,21 @@ You will be prompted to choose actions like:
 - YYYY-MM-DD invoices_line_items.csv — Line item breakdown
 - YYYY-MM-DD invoices_payments.csv — Payment history
 - YYYY-MM-DD overdue_invoices.csv — Overdue invoice report
+
+## update_work_type.py
+
+### Features
+- Bulk-updates the Work Type of Karbon work items via PATCH, based on a spreadsheet
+
+### Usage
+Create a spreadsheet (`.xlsx` or `.csv`) with a `Key` column (the WorkItemKey) and a
+`Work Type` column (the new Work Type name), e.g. `work_type_updates.xlsx`. Then run:
+```
+python update_work_type.py [path/to/spreadsheet.xlsx]
+```
+The spreadsheet defaults to `work_type_updates.xlsx` in the current directory if no path is given.
+
+Add `--dry-run` to preview the changes without sending any requests:
+```
+python update_work_type.py --dry-run
+```
